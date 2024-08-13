@@ -9,6 +9,8 @@ import java.io.PrintWriter;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Author: Vinni
@@ -19,6 +21,7 @@ public class PrincipalSrv extends javax.swing.JFrame {
     private Socket clientSocket;
     private BufferedReader in;
     private PrintWriter out;
+    private static Set<PrintWriter> clientWriters = new HashSet<>();
 
     /**
      * Creates new form Principal1
@@ -92,15 +95,7 @@ public class PrincipalSrv extends javax.swing.JFrame {
                     serverSocket = new ServerSocket( PORT);
                     mensajesTxt.append("Servidor TCP en ejecución: "+ addr + " ,Puerto " + serverSocket.getLocalPort()+ "\n");
                     while (true) {
-                        clientSocket = serverSocket.accept();
-                        in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-                        String linea;
-                        out = new PrintWriter(clientSocket.getOutputStream(), true);
-                        while ((linea = in.readLine()) != null) {
-                            mensajesTxt.append("Cliente: " + linea + "\n");
-                            out.println("Mensaje recibido en el server " );
-                        }
-
+                        new ClientHandler(serverSocket.accept()).start();
                     }
                 } catch (IOException ex) {
                     ex.printStackTrace();
@@ -115,4 +110,44 @@ public class PrincipalSrv extends javax.swing.JFrame {
     private javax.swing.JLabel jLabel1;
     private javax.swing.JTextArea mensajesTxt;
     private javax.swing.JScrollPane jScrollPane1;
+
+    private static class ClientHandler extends Thread {
+        private Socket socket;
+        private PrintWriter out;
+
+        public ClientHandler(Socket socket) {
+            this.socket = socket;
+        }
+
+        public void run() {
+            try {
+                out = new PrintWriter(socket.getOutputStream(), true);
+                synchronized (clientWriters) {
+                    clientWriters.add(out);
+                }
+
+                BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+                String message;
+                while ((message = in.readLine()) != null) {
+                    System.out.println("Mensaje recibido: " + message);
+                    synchronized (clientWriters) {
+                        for (PrintWriter writer : clientWriters) {
+                            writer.println(message);
+                        }
+                    }
+                }
+            } catch (IOException e) {
+                System.out.println("Error en el servidor: " + e.getMessage());
+            } finally {
+                try {
+                    socket.close();
+                } catch (IOException e) {
+                    System.out.println("Error al cerrar el socket: " + e.getMessage());
+                }
+                synchronized (clientWriters) {
+                    clientWriters.remove(out);
+                }
+            }
+        }
+    }
 }

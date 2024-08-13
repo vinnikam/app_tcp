@@ -126,6 +126,7 @@ public class PrincipalCli extends javax.swing.JFrame {
 
     private void conectar() {
         JOptionPane.showMessageDialog(this, "Conectando con servidor");
+
         try {
             if (socket == null || socket.isClosed()) {
                 socket = new Socket("localhost", PORT); // Asume que el servidor está en localhost y escucha en el puerto 5555
@@ -146,7 +147,7 @@ public class PrincipalCli extends javax.swing.JFrame {
             }).start();
             System.out.println(out);
         }catch (IOException e){
-            
+
         }
     }
     private void enviarMensaje() {
