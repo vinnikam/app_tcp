@@ -16,12 +16,16 @@ public class PrincipalCli extends javax.swing.JFrame {
     private Socket socket;
     private PrintWriter out;
     private BufferedReader in;
+    private boolean servidorActivo = false;
 
     /**
      * Creates new form Principal1
      */
     public PrincipalCli() {
         initComponents();
+        this.bConectar.setEnabled(true);
+        this.btEnviar.setEnabled(false);
+
     }
 
     /**
@@ -125,35 +129,58 @@ public class PrincipalCli extends javax.swing.JFrame {
     // End of variables declaration
 
     private void conectar() {
-        JOptionPane.showMessageDialog(this, "Conectando con servidor");
+
 
         try {
             if (socket == null || socket.isClosed()) {
                 socket = new Socket("localhost", PORT); // Asume que el servidor está en localhost y escucha en el puerto 5555
                 out = new PrintWriter(socket.getOutputStream(), true);
             }
+            this.servidorActivo = true;
+            if (out == null)
+            {
+                JOptionPane.showMessageDialog(this, "Servidor no conectado");
+            }
             in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-            new Thread(new Runnable() {
-                public void run() {
+
+            new Thread(() -> {
+                String fromServer;
+                try {
+                    while ((fromServer = in.readLine()) != null) {
+                        mensajesTxt.append("Msg del servidor: " + fromServer + "\n");
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    JOptionPane.showMessageDialog(this, "Servidor desconectado");
+                    this.bConectar.setEnabled(true);
+                    this.btEnviar.setEnabled(false);
                     try {
-                        String fromServer;
-                        while ((fromServer = in.readLine()) != null) {
-                            mensajesTxt.append("Servidor: " + fromServer + "\n");
-                        }
+                        this.socket.close();
                     } catch (IOException ex) {
-                        ex.printStackTrace();
+                        throw new RuntimeException(ex);
                     }
                 }
             }).start();
-            System.out.println(out);
-        }catch (IOException e){
 
+        }catch (IOException e){
+            this.servidorActivo = false;
+            JOptionPane.showMessageDialog(this, "No se obtuvo conexion con el servidor");
+        }
+        if (servidorActivo){
+            this.bConectar.setEnabled(false);
+            this.btEnviar.setEnabled(true);
+        }else{
+            this.bConectar.setEnabled(true);
+            this.btEnviar.setEnabled(false);
         }
     }
     private void enviarMensaje() {
-        out.println(mensajeTxt.getText());
-        mensajeTxt.setText("");
 
+        if (out != null) {
+            out.println(mensajeTxt.getText());
+            mensajeTxt.setText("");
+
+        }
 
 
     }

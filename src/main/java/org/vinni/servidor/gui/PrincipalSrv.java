@@ -9,8 +9,8 @@ import java.io.PrintWriter;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Author: Vinni
@@ -21,7 +21,7 @@ public class PrincipalSrv extends javax.swing.JFrame {
     private Socket clientSocket;
     private BufferedReader in;
     private PrintWriter out;
-    private static Set<PrintWriter> clientWriters = new HashSet<>();
+    private List<Socket> clientSockets;
 
     /**
      * Creates new form Principal1
@@ -50,7 +50,7 @@ public class PrincipalSrv extends javax.swing.JFrame {
             }
         });
         getContentPane().add(bIniciar);
-        bIniciar.setBounds(100, 90, 250, 40);
+        bIniciar.setBounds(150, 50, 250, 40);
 
         jLabel1.setFont(new java.awt.Font("Tahoma", 1, 14)); // NOI18N
         jLabel1.setForeground(new java.awt.Color(204, 0, 0));
@@ -64,9 +64,9 @@ public class PrincipalSrv extends javax.swing.JFrame {
         jScrollPane1.setViewportView(mensajesTxt);
 
         getContentPane().add(jScrollPane1);
-        jScrollPane1.setBounds(20, 160, 410, 70);
+        jScrollPane1.setBounds(20, 150, 500, 120);
 
-        setSize(new java.awt.Dimension(491, 290));
+        setSize(new java.awt.Dimension(570, 320));
         setLocationRelativeTo(null);
     }// </editor-fold>
 
@@ -87,20 +87,23 @@ public class PrincipalSrv extends javax.swing.JFrame {
     }
 
     private void iniciarServidor() {
-        JOptionPane.showMessageDialog(this, "Iniciando servidor");
-        new Thread(new Runnable() {
-            public void run() {
-                try {
-                    InetAddress addr = InetAddress.getLocalHost();
-                    serverSocket = new ServerSocket( PORT);
-                    mensajesTxt.append("Servidor TCP en ejecución: "+ addr + " ,Puerto " + serverSocket.getLocalPort()+ "\n");
-                    while (true) {
-                        new ClientHandler(serverSocket.accept()).start();
-                    }
-                } catch (IOException ex) {
-                    ex.printStackTrace();
-                    mensajesTxt.append("Error en el servidor: " + ex.getMessage() + "\n");
+        clientSockets = new ArrayList<>();
+        this.bIniciar.setEnabled(false);
+        new Thread(() -> {
+            try {
+                InetAddress addr = InetAddress.getLocalHost();
+                serverSocket = new ServerSocket( PORT);
+
+                mensajesTxt.append("Servidor TCP en ejecución: "+ addr + " ,Puerto " + serverSocket.getLocalPort()+ "\n");
+                while (true) {
+                    Socket clientSocket = serverSocket.accept();
+                    clientSockets.add(clientSocket);
+                    mensajesTxt.append("Cliente conectado: " + clientSocket.getInetAddress().getHostAddress() + "\n");
+                    new ClientHandler(clientSocket).start();
                 }
+            } catch (IOException ioException) {
+                ioException.printStackTrace();
+                this.bIniciar.setEnabled(true);
             }
         }).start();
     }
@@ -111,42 +114,30 @@ public class PrincipalSrv extends javax.swing.JFrame {
     private javax.swing.JTextArea mensajesTxt;
     private javax.swing.JScrollPane jScrollPane1;
 
-    private static class ClientHandler extends Thread {
-        private Socket socket;
-        private PrintWriter out;
+    private class ClientHandler extends Thread {
+        private Socket clientSocket;
+        private BufferedReader in;
 
         public ClientHandler(Socket socket) {
-            this.socket = socket;
+            this.clientSocket = socket;
+            try {
+                in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
 
         public void run() {
+            String inputLine;
             try {
-                out = new PrintWriter(socket.getOutputStream(), true);
-                synchronized (clientWriters) {
-                    clientWriters.add(out);
-                }
-
-                BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                String message;
-                while ((message = in.readLine()) != null) {
-                    System.out.println("Mensaje recibido: " + message);
-                    synchronized (clientWriters) {
-                        for (PrintWriter writer : clientWriters) {
-                            writer.println(message);
-                        }
+                while ((inputLine = in.readLine()) != null) {
+                    for (Socket socket : clientSockets) {
+                        PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+                        out.println(inputLine);
                     }
                 }
             } catch (IOException e) {
-                System.out.println("Error en el servidor: " + e.getMessage());
-            } finally {
-                try {
-                    socket.close();
-                } catch (IOException e) {
-                    System.out.println("Error al cerrar el socket: " + e.getMessage());
-                }
-                synchronized (clientWriters) {
-                    clientWriters.remove(out);
-                }
+                e.printStackTrace();
             }
         }
     }
